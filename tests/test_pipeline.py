@@ -23,8 +23,8 @@ from core.document_parser import (
     parse_document,
 )
 from core.export import RESULT_COLUMNS, results_to_csv, safe_export_name, summary_to_json
-from core.preprocessing import build_claims, clean_pages, clean_text, segment_claims
-from core.risk import apply_threshold, calculate_document_risk
+from core.preprocessing import build_claims, clean_pages, clean_text, format_model_input, segment_claims
+from core.risk import NEGATIVE_LABEL, POSITIVE_LABEL, apply_threshold, calculate_document_risk
 
 
 class DocumentParserTests(unittest.TestCase):
@@ -137,6 +137,26 @@ class PreprocessingTests(unittest.TestCase):
         self.assertEqual(len(claims), 3)
         self.assertIn("energi terbarukan", claims[0])
 
+    def test_document_claims_reproduce_claim_and_neighbor_context_format(self):
+        pages = [{"page": 7, "text": (
+            "Emisi cakupan satu turun 12% dibandingkan tahun dasar 2020. "
+            "Perhitungan diverifikasi oleh auditor independen pada tahun 2024. "
+            "Energi terbarukan memasok 30% kebutuhan fasilitas utama. "
+            "Metodologi tersedia pada lampiran lingkungan dalam laporan ini."
+        )}]
+        claims = build_claims(pages)
+        self.assertEqual(len(claims), 4)
+        self.assertEqual(claims[1]["page"], 7)
+        self.assertEqual(
+            claims[1]["model_text"],
+            format_model_input(
+                claims[1]["text"],
+                f'PREV_1: {claims[0]["text"]}\nNEXT_1: {claims[2]["text"]}\nNEXT_2: {claims[3]["text"]}',
+            ),
+        )
+        self.assertNotIn("PREV_2:", claims[1]["evidence_context"])
+        self.assertTrue(claims[2]["model_text"].startswith("CLAIM: "))
+
     def test_repeated_headers_are_removed_without_removing_full_sentences(self):
         sentence = "Kami menggunakan energi terbarukan di seluruh fasilitas."
         pages = [
@@ -169,13 +189,13 @@ class RiskAndExportTests(unittest.TestCase):
 
     def test_threshold_copies_rows_and_sets_selected_class_probability(self):
         first = apply_threshold(self.rows, threshold=0.9)
-        self.assertTrue(all(row["prediction"] == "Low Indication" for row in first))
+        self.assertTrue(all(row["prediction"] == NEGATIVE_LABEL for row in first))
         self.assertAlmostEqual(first[0]["confidence"], 0.2)
         self.assertNotIn("prediction", self.rows[0])
         self.assertIsNot(first[0], self.rows[0])
         self.assertEqual(first[0]["greenwashing_probability"], 0.8)
         tie = apply_threshold(self.rows, threshold=0.8)
-        self.assertEqual(tie[0]["prediction"], "Potential Greenwashing")
+        self.assertEqual(tie[0]["prediction"], POSITIVE_LABEL)
         self.assertAlmostEqual(calculate_document_risk(self.rows, threshold=0.9)["risk_score"], 25.0)
 
     def test_empty_and_nonfinite_probabilities_are_rejected(self):
@@ -224,7 +244,7 @@ class RiskAndExportTests(unittest.TestCase):
         self.assertEqual(decoded["document"], document)
         self.assertEqual(decoded["total_claims"], 2)
         self.assertEqual(decoded["risk_score"], summary["risk_score"])
-        self.assertEqual(decoded["threshold"], 0.5)
+        self.assertEqual(decoded["threshold"], 0.36)
         self.assertEqual(safe_export_name(r"..\..\Laporan 2024.pdf"), "Laporan 2024")
         self.assertNotIn("/", safe_export_name("../../report.pdf"))
 

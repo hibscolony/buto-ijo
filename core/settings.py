@@ -44,8 +44,9 @@ def configured_model_path(
 
 MODEL_PATH = default_model_path()
 BATCH_SIZE = 16
-MAX_LENGTH = 512
+MAX_LENGTH = 384
 MIN_CHAR_LENGTH = 25
+DEFAULT_THRESHOLD = 0.36
 
 
 def _integer(name: str, default: int, minimum: int, maximum: int) -> int:
@@ -65,7 +66,7 @@ class Settings:
     max_length: int = MAX_LENGTH
     min_char_length: int = MIN_CHAR_LENGTH
     max_upload_mb: int = 50
-    default_threshold: float = 0.50
+    default_threshold: float = DEFAULT_THRESHOLD
 
 
 def get_settings() -> Settings:

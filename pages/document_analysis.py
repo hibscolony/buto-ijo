@@ -18,7 +18,7 @@ from components.cards import (
 from components.charts import distribution_donut, risk_gauge
 from core.document_parser import DocumentError, ScanPDFError, parse_document
 from core.inference import analyze_document
-from core.model import ModelError, load_model
+from core.model import HIGHER_EVIDENTIARY_RISK, LOWER_EVIDENTIARY_RISK, ModelError, load_model
 from core.risk import apply_threshold, calculate_document_risk
 from core.export import results_to_csv, safe_export_name, summary_to_json
 from core.settings import get_settings
@@ -55,7 +55,7 @@ def _save_analysis(payload: dict, metadata: dict) -> None:
     st.session_state["document_metadata"] = deepcopy(metadata)
     st.session_state["risk_summary"] = deepcopy(payload["risk_summary"])
     st.session_state["truncated_claims"] = int(payload.get("truncated_claims", 0))
-    st.session_state["_analysis_threshold"] = .5
+    st.session_state["_analysis_threshold"] = get_settings().default_threshold
     st.session_state.pop("threshold_widget", None)
     for key in ("results_page", "claim_filter", "claim_search", "claim_sort"):
         st.session_state.pop(key, None)
@@ -75,7 +75,7 @@ def render_upload() -> None:
     settings = get_settings()
     with st.container(border=True, key="document_upload"):
         st.markdown('<div class="section-title">Mulai analisis dokumen</div><div class="section-note">'
-                    'Unggah Sustainability Report untuk meninjau potensi greenwashing pada setiap klaim.</div>',
+                    'Unggah Sustainability Report untuk meninjau risiko kecukupan bukti pada setiap klaim.</div>',
                     unsafe_allow_html=True)
         uploaded = st.file_uploader("Upload Sustainability Report", type=["pdf", "docx", "txt"],
                                     accept_multiple_files=False, label_visibility="collapsed", key="document_file")
@@ -154,16 +154,16 @@ def render_results() -> None:
     # A same-key widget gets a new identity on Beranda vs Analisis Dokumen.
     # Explicitly hydrate on every run, not only after widget-state cleanup;
     # otherwise direct page navigation can reset this slider to its minimum.
-    st.session_state["threshold_widget"] = float(st.session_state.get("_analysis_threshold", .5))
+    st.session_state["threshold_widget"] = float(st.session_state.get("_analysis_threshold", get_settings().default_threshold))
     with st.expander("Pengaturan threshold & metodologi", expanded=False):
-        threshold = st.slider("Greenwashing Threshold", min_value=0.0, max_value=1.0, step=.01,
+        threshold = st.slider("Higher-risk Threshold", min_value=0.0, max_value=1.0, step=.01,
                               key="threshold_widget", on_change=_remember_threshold,
-                              help="Klaim ditandai jika probabilitas greenwashing ≥ threshold. Mengubah threshold tidak menjalankan model ulang.")
+                              help="Klaim ditandai jika probabilitas Higher Evidentiary Risk ≥ threshold. Mengubah threshold tidak menjalankan model ulang.")
         st.caption("Probabilitas tersimpan tetap sama. Prediction, Confidence, Risk Index, dan ekspor mengikuti threshold aktif.")
         st.markdown("**Risk Index** = 100 × (0.50 × rata-rata probabilitas + 0.35 × rasio klaim ditandai + 0.15 × rasio klaim ditandai dengan confidence tinggi).")
-        st.caption("Confidence tinggi: probabilitas greenwashing ≥ 0.80 dan klaim ditandai. Semua rasio menggunakan seluruh klaim sebagai penyebut. LOW ≤ 30; MODERATE > 30 hingga 60; HIGH > 60.")
+        st.caption("Confidence tinggi: probabilitas Higher Evidentiary Risk ≥ 0.80 dan klaim ditandai. Semua rasio menggunakan seluruh klaim sebagai penyebut. LOW ≤ 30; MODERATE > 30 hingga 60; HIGH > 60.")
         st.caption("Confidence adalah probabilitas kelas yang dipilih berdasarkan threshold; nilainya dapat di bawah 50% jika threshold diubah.")
-        st.caption("Model dilatih pada klaim lingkungan mandiri dengan label silver tentang dukungan bukti. Pipeline menilai seluruh kalimat yang lolos segmentasi, termasuk kalimat sosial/tata kelola di luar domain training; validitas pada domain tersebut belum ditetapkan.")
+        st.caption("Input dokumen mengikuti format training: CLAIM + dua klaim sebelum/sesudah sebagai evidence context. Model dilatih pada klaim lingkungan dengan label silver Rule–Qwen; validitas di luar domain tersebut belum ditetapkan.")
     results = apply_threshold(originals, float(threshold))
     summary = calculate_document_risk(results, threshold=float(threshold))
     st.session_state["analysis_results"] = results
@@ -171,11 +171,11 @@ def render_results() -> None:
     kpi_cards(summary)
     risk_col, summary_col = st.columns([1.02, 1.65], gap="medium")
     with risk_col, st.container(border=True, key="risk_chart"):
-        st.markdown('<div class="section-title">Greenwashing Risk Index</div>', unsafe_allow_html=True)
+        st.markdown('<div class="section-title">Evidentiary Risk Index</div>', unsafe_allow_html=True)
         st.plotly_chart(risk_gauge(summary["risk_score"], summary["risk_level"]), width="stretch",
                         config={"displayModeBar": False}, key="document_risk_gauge")
         st.markdown(f'<div style="text-align:center"><span class="risk-badge {summary["risk_level"].lower()}">{summary["risk_level"]} RISK</span></div>', unsafe_allow_html=True)
-        st.caption("Risk Index merupakan agregasi claim-level predictions dan bukan kelas langsung dari model.")
+        st.caption("Risk Index merupakan agregasi claim-level predictions dan bukan kelas langsung dari model atau bukti pelanggaran.")
     with summary_col, st.container(border=True, key="analysis_summary"):
         summary_card(summary)
         st.caption(f'Dokumen: {metadata.get("name", "—")} · Threshold {threshold:.2f}')
@@ -188,10 +188,10 @@ def render_results() -> None:
         st.markdown('<div class="section-title">Distribusi Hasil</div><div class="section-note">Komposisi prediksi pada threshold aktif</div>', unsafe_allow_html=True)
         st.plotly_chart(distribution_donut(summary), width="stretch",
                         config={"displayModeBar": False}, key="document_distribution")
-        st.caption(f'Potential Greenwashing: {summary["flagged_claims"]:,} klaim ({summary["flagged_ratio"]:.1%})')
-        st.caption(f'Low Indication: {summary["total_claims"] - summary["flagged_claims"]:,} klaim ({1 - summary["flagged_ratio"]:.1%})')
+        st.caption(f'Higher Evidentiary Risk: {summary["flagged_claims"]:,} klaim ({summary["flagged_ratio"]:.1%})')
+        st.caption(f'Lower Evidentiary Risk: {summary["total_claims"] - summary["flagged_claims"]:,} klaim ({1 - summary["flagged_ratio"]:.1%})')
     with top_col, st.container(border=True):
-        st.markdown('<div class="section-title">Klaim dengan Risiko Tertinggi</div><div class="section-note">Top 5 berdasarkan greenwashing probability · Perlu Verifikasi</div>', unsafe_allow_html=True)
+        st.markdown('<div class="section-title">Klaim dengan Risiko Bukti Tertinggi</div><div class="section-note">Top 5 berdasarkan higher-risk probability · Perlu Verifikasi</div>', unsafe_allow_html=True)
         top_risk_claims(results)
     section_title("Ekspor hasil analisis", "Seluruh klaim · mengikuti threshold aktif")
     csv_col, json_col, _ = st.columns([1, 1, 1.5])
@@ -208,7 +208,7 @@ def render_claim_results(results: list[dict]) -> None:
     section_title("Hasil Analisis Klaim", "Prediksi per kalimat")
     with st.container(border=True, key="results_card"):
         filter_col, search_col, sort_col = st.columns([1.2, 1.8, 1])
-        prediction_filter = filter_col.selectbox("Filter prediksi", ["Semua Klaim", "Potential Greenwashing", "Low Indication"], key="claim_filter")
+        prediction_filter = filter_col.selectbox("Filter prediksi", ["Semua Klaim", HIGHER_EVIDENTIARY_RISK, LOWER_EVIDENTIARY_RISK], key="claim_filter")
         query = search_col.text_input("Cari klaim...", placeholder="Cari klaim...", key="claim_search")
         sorting = sort_col.selectbox("Urutkan", ["Highest Risk", "Lowest Risk", "Page"], key="claim_sort")
         visible = [row for row in results if (prediction_filter == "Semua Klaim" or row["prediction"] == prediction_filter)

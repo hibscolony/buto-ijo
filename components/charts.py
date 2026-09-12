@@ -28,7 +28,7 @@ def distribution_donut(summary: dict) -> go.Figure:
     flagged = int(summary["flagged_claims"])
     total = int(summary["total_claims"])
     fig = go.Figure(go.Pie(
-        labels=["Potential Greenwashing", "Low Indication"], values=[flagged, total - flagged],
+        labels=["Higher Evidentiary Risk", "Lower Evidentiary Risk"], values=[flagged, total - flagged],
         hole=.76, sort=False, direction="clockwise", rotation=0,
         marker={"colors": ["#E9917D", "#4C9967"], "line": {"color": "#FFFFFF", "width": 3}},
         textinfo="none", hovertemplate="%{label}<br>%{value} klaim · %{percent}<extra></extra>",
@@ -50,7 +50,7 @@ def probability_bars(greenwashing_probability: float, low_probability: float | N
     p = float(greenwashing_probability)
     low = float(low_probability) if low_probability is not None else 1 - p
     fig = go.Figure(go.Bar(
-        x=[low, p], y=["Low Indication", "Potential Greenwashing"], orientation="h",
+        x=[low, p], y=["Lower Evidentiary Risk", "Higher Evidentiary Risk"], orientation="h",
         marker={"color": ["#4C9967", "#E58C7D"], "cornerradius": 5},
         text=[f"{low:.1%}", f"{p:.1%}"], textposition="auto",
         hovertemplate="%{y}: %{x:.2%}<extra></extra>",

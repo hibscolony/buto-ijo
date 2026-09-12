@@ -13,7 +13,7 @@ from components.cards import hero, workflow
 from components.sidebar import render_sidebar
 from components.styles import inject_styles, render_footer
 from core.model import inspect_model
-from core.settings import get_settings
+from core.settings import DEFAULT_THRESHOLD, get_settings
 from pages import about_model, document_analysis, history, quick_test
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -21,7 +21,7 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name
 
 def _initialize_session() -> None:
     defaults = {"analysis_results": [], "document_metadata": {}, "original_probabilities": [],
-                "risk_summary": {}, "history": [], "_analysis_threshold": .5,
+                "risk_summary": {}, "history": [], "_analysis_threshold": DEFAULT_THRESHOLD,
                 "quick_draft": "", "model_ready": False}
     for key, value in defaults.items():
         if key not in st.session_state:

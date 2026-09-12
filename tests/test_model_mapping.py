@@ -1,5 +1,7 @@
 """Semantic label resolution must never assume that class index 1 is positive."""
 
+import json
+from pathlib import Path
 from types import SimpleNamespace
 import unittest
 
@@ -7,6 +9,15 @@ from core.model import ModelError, resolve_label_mapping, resolve_model_path
 
 
 class LabelMappingTests(unittest.TestCase):
+    def test_bundled_metadata_matches_final_rule_qwen_research_pipeline(self):
+        path = Path(__file__).resolve().parents[1] / "_models" / "BUTO_IJO_v4_IndoBERT" / "buto_ijo_v4_metadata.json"
+        metadata = json.loads(path.read_text(encoding="utf-8"))
+        self.assertEqual(metadata["label_source"], "rule_qwen_primary_consensus_v43")
+        self.assertEqual(metadata["best_validation_threshold"], 0.36)
+        self.assertEqual(metadata["training_max_length"], 384)
+        self.assertEqual(metadata["evaluation_metrics"]["test_claims"], 149)
+        self.assertNotIn("kimi_model", metadata)
+
     def test_actual_checkpoint_label_vocabulary(self):
         config = {
             "_num_labels": 5,  # The supplied checkpoint contains this stale field.

@@ -1,12 +1,26 @@
 {
   "project": "BUTO IJO",
-  "pipeline_version": "v4_environmental_only_rule_qwen_kimi",
+  "model_version": "v4",
+  "pipeline_version": "v4_rule_qwen_primary_consensus",
   "task": "environmental sustainability claim evidentiary risk",
   "label_type": "high-confidence pseudo/silver labels",
-  "label_source": "strict Rule + Qwen + Kimi consensus",
+  "label_source": "rule_qwen_primary_consensus_v43",
+  "training_dataset": "915 environmental claims from eight Indonesian listed companies",
   "qwen_model": "Qwen/Qwen3-4B-Instruct-2507",
-  "kimi_model": "moonshotai/Kimi-VL-A3B-Instruct",
   "indobert_model": "indobenchmark/indobert-base-p1",
+  "input_format": "CLAIM: <claim> [SEP] CONTEXT: <evidence context>",
+  "context_window": 2,
+  "training_max_length": 384,
+  "label_mapping": {
+    "id2label": {
+      "0": "Lower Risk",
+      "1": "Higher Risk"
+    },
+    "label2id": {
+      "Lower Risk": 0,
+      "Higher Risk": 1
+    }
+  },
   "risk_definition": {
     "Higher Risk": "evidence score 0-4",
     "Lower Risk": "evidence score 5-10"
@@ -18,26 +32,36 @@
     "method_source",
     "verification_traceability"
   ],
+  "weak_supervision": {
+    "primary_sources": [
+      "deterministic evidence-rule scorer",
+      "Qwen3"
+    ],
+    "auxiliary_diagnostic": "FinMatcha; excluded from primary pseudo-labels after diagnostic collapse"
+  },
   "strict_environmental_rule": "requires explicit environmental domain + standalone claim signal; generic sustainability/ESG/SDG alone excluded",
-  "train_companies": [
-    "INDF",
-    "INTP",
-    "ASII",
-    "UNTR"
-  ],
-  "val_companies": [
-    "BRI",
-    "Mandiri"
-  ],
-  "test_companies": [
-    "INCO",
-    "BSI"
-  ],
-  "best_validation_threshold": 0.3600000000000002,
+  "train_companies": ["INDF", "INTP", "ASII", "UNTR"],
+  "val_companies": ["BRI", "Mandiri"],
+  "test_companies": ["INCO", "BSI"],
+  "best_validation_threshold": 0.36,
   "n_pseudo_labels": 915,
   "n_train": 627,
   "n_val": 139,
   "n_test": 149,
   "seed": 42,
-  "limitation": "No human gold-standard is assumed. Reported downstream metrics are predictive agreement with strict multi-teacher pseudo labels."
+  "evaluation_metrics": {
+    "test_accuracy": 0.7516778523489933,
+    "test_balanced_accuracy": 0.7215355805243447,
+    "test_macro_f1": 0.7279546033290119,
+    "higher_risk_recall": 0.8764044943820225,
+    "confusion_matrix": {
+      "true_lower_pred_lower": 34,
+      "true_lower_pred_higher": 26,
+      "true_higher_pred_lower": 11,
+      "true_higher_pred_higher": 78
+    },
+    "test_claims": 149,
+    "decision_threshold": 0.36
+  },
+  "limitation": "No human gold standard is assumed. Metrics measure predictive agreement with strict Rule-Qwen pseudo/silver labels. The model triages evidentiary risk and does not establish factual or legal greenwashing."
 }

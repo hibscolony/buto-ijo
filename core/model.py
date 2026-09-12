@@ -17,8 +17,12 @@ from transformers import AutoConfig, AutoModelForSequenceClassification, AutoTok
 
 from core.settings import MODEL_PATH
 
-POTENTIAL_GREENWASHING = "Potential Greenwashing"
-LOW_INDICATION = "Low Indication"
+HIGHER_EVIDENTIARY_RISK = "Higher Evidentiary Risk"
+LOWER_EVIDENTIARY_RISK = "Lower Evidentiary Risk"
+# Compatibility aliases for the established inference/export schema. Their
+# values are the research labels used by the final Rule-Qwen checkpoint.
+POTENTIAL_GREENWASHING = HIGHER_EVIDENTIARY_RISK
+LOW_INDICATION = LOWER_EVIDENTIARY_RISK
 METADATA_FILE = "buto_ijo_v4_metadata.json"
 
 
@@ -50,8 +54,8 @@ class ModelBundle:
 
 def _canonical(label: str) -> str | None:
     name = re.sub(r"[^a-z0-9]+", " ", str(label).lower()).strip()
-    higher = {"higher risk", "high risk", "potential greenwashing", "greenwashing", "indikasi greenwashing", "risiko tinggi"}
-    lower = {"lower risk", "low risk", "low indication", "non greenwashing", "not greenwashing", "no greenwashing", "risiko rendah"}
+    higher = {"higher risk", "higher evidentiary risk", "high risk", "potential greenwashing", "greenwashing", "indikasi greenwashing", "risiko tinggi"}
+    lower = {"lower risk", "lower evidentiary risk", "low risk", "low indication", "non greenwashing", "not greenwashing", "no greenwashing", "risiko rendah"}
     if name in higher:
         return POTENTIAL_GREENWASHING
     if name in lower:

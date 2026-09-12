@@ -57,16 +57,27 @@ Config dan metadata lokal menyatakan:
 
 | Index | Label asli | Tampilan aplikasi | Definisi metadata |
 |---|---|---|---|
-| 0 | Lower Risk | Low Indication | Evidence score 5–10 |
-| 1 | Higher Risk | Potential Greenwashing | Evidence score 0–4 |
+| 0 | Lower Risk | Lower Evidentiary Risk | Evidence score 5–10 |
+| 1 | Higher Risk | Higher Evidentiary Risk | Evidence score 0–4 |
 
 Mapping ini **dibaca saat runtime**, bukan diasumsikan dari index 1. `resolve_label_mapping()` memeriksa `id2label`, `label2id`, dan mapping metadata bila ada. Konflik atau label generik tanpa arti yang eksplisit menghentikan inference. Checkpoint lain dengan urutan label terbalik tetap didukung.
 
 Checkpoint ini memiliki field warisan `_num_labels: 5`; mapping aktif berisi dua kelas dan tensor `classifier.weight` berukuran `[2, 768]`, dengan bias `[2]`. Loader memvalidasi dimensi bobot serta `model.config.num_labels`, lalu menolak missing/mismatched weights agar classifier baru yang belum dilatih tidak dipakai. Berkas asli tidak dimodifikasi.
 
-Model dasar dari metadata adalah `indobenchmark/indobert-base-p1`. Dataset berisi 915 pseudo/silver labels (627 train, 139 validation, 149 test), berasal dari konsensus Rule + Qwen + Kimi. **Kimi dan Qwen hanya berperan sebagai teacher offline saat pseudo-label training dibuat; aplikasi tidak memanggil keduanya saat inference.** Runtime hanya memuat checkpoint IndoBERT lokal. Tidak diasumsikan ada human gold standard. **Model mempelajari risiko kecukupan bukti pada klaim lingkungan**, bukan pembuktian kesalahan perusahaan. Tidak ada accuracy/F1 yang dibuat jika tidak ada di metadata.
+Model dasar dari metadata adalah `indobenchmark/indobert-base-p1`. Dataset berisi 915 pseudo/silver labels (627 train, 139 validation, 149 test). Label final berasal dari **aturan bukti deterministik + Qwen3**. FinMatcha hanya digunakan sebagai diagnostik tambahan dan dikeluarkan dari pseudo-label primer setelah hasil diagnostiknya kolaps. Runtime hanya memuat checkpoint IndoBERT lokal; Qwen tidak dipanggil saat inference. Tidak diasumsikan ada human gold standard. **Model mempelajari risiko kecukupan bukti pada klaim lingkungan**, bukan pembuktian kesalahan perusahaan.
 
-Metadata mencatat `best_validation_threshold ≈ 0.36`; aplikasi memulai pada **0.50**, sesuai spesifikasi. Nilai metadata ditampilkan sebagai informasi, bukan otomatis diterapkan. Threshold tersebut tidak membuktikan kalibrasi probabilitas di data baru.
+Metadata mencatat `best_validation_threshold = 0.36` dan aplikasi menggunakan **0.36** sebagai default. Pada 149 klaim dari perusahaan held-out, checkpoint menghasilkan accuracy 0,752, balanced accuracy 0,722, macro F1 0,728, dan recall Higher Risk 0,876 terhadap label silver Rule–Qwen. Confusion matrix-nya TN=34, FP=26, FN=11, TP=78. Angka tersebut mengukur agreement dengan pseudo-label, bukan validasi terhadap human gold standard atau bukti kalibrasi pada data baru.
+
+Input analisis dokumen mengikuti format training:
+
+```text
+CLAIM: <claim> [SEP] CONTEXT: PREV_2: ...
+PREV_1: ...
+NEXT_1: ...
+NEXT_2: ...
+```
+
+Uji Teks Cepat memakai format claim-only (`CLAIM: <claim>`) karena tidak memiliki kalimat sekitar. Karena itu, hasil dokumen lebih dekat dengan pipeline utama dalam esai.
 
 ## Alur penggunaan
 
@@ -87,14 +98,15 @@ Data dokumen dan hasil disimpan di memori session, tanpa database atau penyimpan
 - Cleaning hanya whitespace, soft hyphen akibat line wrap, dan margin pendek yang berulang. Tanda baca, angka, persentase, satuan, kapitalisasi, dan kata dipertahankan. Lowercasing tokenizer mengikuti konfigurasi tokenizer asli.
 - Segmentasi menggunakan heuristik kalimat/paragraf/bullet; melindungi desimal, singkatan umum, dan URL. Minimum 25 karakter. Tidak ada stemming atau stopword removal.
 - Seluruh kalimat yang memenuhi batas segmentasi dianalisis. Tidak ada classifier relevansi lingkungan tambahan; teks sosial, tata kelola, tabel, atau prosa umum dapat berada di luar cakupan training. Tinjau klaim dan konteks aslinya sebelum menarik kesimpulan. Kalimat lintas halaman dan laporan multi-kolom dapat tersegmentasi kurang sempurna.
-- Token dibatasi maksimum 512 termasuk special tokens; input panjang ditruncate sesuai spesifikasi dan jumlah klaim terpotong ditampilkan. Prediction tidak mencakup teks setelah batas ini.
+- Setiap klaim dipasangkan dengan maksimal dua klaim sebelum dan dua klaim sesudah sebagai evidence context. Nomor halaman tetap melekat pada klaim target.
+- Token dibatasi maksimum 384 secara default, sesuai konfigurasi training, termasuk special tokens. Input panjang ditruncate dan jumlah klaim terpotong ditampilkan. Nilai dapat dioverride hingga 512 token.
 
 ## Risk Index dan confidence
 
 Semua definisi agregasi ada di `core/risk.py`:
 
 ```text
-flagged = greenwashing_probability >= threshold
+flagged = higher_risk_probability >= threshold
 mean_probability = rata-rata probabilitas Higher Risk seluruh klaim
 flagged_ratio = jumlah flagged / jumlah seluruh klaim
 high_confidence_flagged_ratio = jumlah flagged dengan probability >= 0.80 / jumlah seluruh klaim
@@ -118,7 +130,7 @@ CSV memiliki kolom `claim_id,page,claim,prediction,greenwashing_probability,conf
 |---|---|---|
 | `BUTO_IJO_MODEL_PATH` | Checkpoint repository pada Linux; checkpoint repository atau `E:\Downloads\Buto Ijo\_models` pada Windows | Override lokasi checkpoint lokal |
 | `BUTO_IJO_BATCH_SIZE` | `16` | Klaim per batch; turunkan jika kehabisan memori |
-| `BUTO_IJO_MAX_LENGTH` | `512` | Maksimum token (8–512, dibatasi juga kapasitas model) |
+| `BUTO_IJO_MAX_LENGTH` | `384` | Maksimum token (8–512, dibatasi juga kapasitas model) |
 | `BUTO_IJO_MIN_CHAR_LENGTH` | `25` | Batas minimum karakter klaim |
 | `BUTO_IJO_MAX_UPLOAD_MB` | `50` | Batas file aplikasi (1–200 MB) |
 | `BUTO_IJO_TORCH_THREADS` | Maks. `4` | Thread PyTorch CPU (1–64) |
@@ -158,9 +170,9 @@ python -m unittest discover -s tests -v
 
 Tes integrasi memerlukan checkpoint lokal dan menguji probabilitas terhadap softmax forward pass model sebenarnya, konsistensi single/batch, cache, dan mode evaluasi. Nilai sintetis hanya digunakan sebagai input tes formula matematika, bukan prediksi aplikasi. Tidak ada retraining selama pengujian.
 
-Validasi pada 8 September 2026: 45 pengujian lulus, termasuk 9 pengujian UI Streamlit. Checkpoint asli berhasil dimuat dengan PyTorch 2.10.0 CPU dan Transformers 4.57.6. Uji browser mencakup upload PDF tiga halaman (satu halaman tanpa teks), analisis sepuluh kalimat dengan model asli, dashboard hasil, dan tombol unduh CSV. Ini merupakan pengujian fungsional; belum merupakan load test multiuser atau benchmark laporan 300 halaman.
+Validasi pada 8 September 2026 mencakup upload PDF tiga halaman, analisis model asli, dashboard hasil, dan ekspor CSV. Ini merupakan pengujian fungsional; belum merupakan load test multiuser atau benchmark laporan 300 halaman.
 
-Debugging akhir pada 12 September 2026: **61 pengujian lulus** dengan integration test model asli diaktifkan. Perbaikan mencakup:
+Debugging akhir pada 12 September 2026 dijalankan dengan integration test model asli diaktifkan. Perbaikan mencakup:
 
 - Threshold dan draft teks tetap tersimpan saat berpindah langsung antara Beranda, Analisis Dokumen, dan Uji Teks Cepat. Navigasi tidak menjalankan inference ulang atau mengubah Risk Index tanpa perubahan threshold.
 - Analisis baru mengosongkan pencarian dan filter dokumen sebelumnya.
@@ -168,6 +180,7 @@ Debugging akhir pada 12 September 2026: **61 pengujian lulus** dengan integratio
 - Index label menolak boolean, pecahan, dan string yang tidak valid; mapping checkpoint asli tetap 0 = Lower Risk dan 1 = Higher Risk.
 - Status sidebar langsung mencerminkan kegagalan pemuatan model dan pulih setelah percobaan yang berhasil.
 - Ketika unggahan baru gagal dibaca, hasil yang tersimpan tetap diberi keterangan sebagai hasil dokumen sebelumnya.
+- Pipeline inference memakai format `CLAIM + CONTEXT`, label Higher/Lower Evidentiary Risk, maximum length 384, dan threshold validasi 0,36 sebagaimana pipeline final Rule–Qwen pada esai.
 
 Log pengujian lokal: `tests/final_debug_validation.log` (diabaikan Git). Traceback bertanda pengujian penanganan error pada log berasal dari tes yang sengaja mensimulasikan kegagalan pemuatan, bukan kegagalan pengujian. Bobot checkpoint tidak diubah.
 

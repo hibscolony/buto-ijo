@@ -8,7 +8,7 @@ import streamlit as st
 from components.cards import page_heading
 from components.charts import probability_bars
 from core.inference import predict_text
-from core.model import ModelError, load_model
+from core.model import HIGHER_EVIDENTIARY_RISK, LOWER_EVIDENTIARY_RISK, ModelError, load_model
 from core.settings import get_settings
 
 LOGGER = logging.getLogger(__name__)
@@ -33,7 +33,7 @@ def render_input() -> None:
         button, caption = st.columns([1.3, 3])
         run = button.button("Analisis Klaim", type="primary", width="stretch",
                             icon=":material/manage_search:", key="analyze_quick")
-        caption.caption("Diproses sebagai satu input · Threshold 0.50 · Tanpa API eksternal")
+        caption.caption(f"Claim-only input · Threshold {settings.default_threshold:.2f} · Tanpa API eksternal")
         if run:
             if not text.strip():
                 st.warning("Masukkan klaim keberlanjutan terlebih dahulu.")
@@ -45,7 +45,7 @@ def render_input() -> None:
                         st.session_state.pop("model_load_error", None)
                         st.session_state["model_ready"] = True
                         st.session_state["model_device"] = str(bundle.device)
-                        result = predict_text(text, bundle=bundle, settings=settings, threshold=.5)
+                        result = predict_text(text, bundle=bundle, settings=settings, threshold=settings.default_threshold)
                     st.session_state["quick_result"] = result
                     st.session_state["quick_result_text"] = text
                     st.rerun()
@@ -60,7 +60,7 @@ def render_input() -> None:
             if text.strip() != st.session_state.get("quick_result_text", "").strip():
                 st.info("Hasil di bawah berasal dari input sebelumnya. Tekan Analisis Klaim untuk menganalisis perubahan.")
             st.divider()
-            flagged = result["prediction"] == "Potential Greenwashing"
+            flagged = result["prediction"] == HIGHER_EVIDENTIARY_RISK
             css = "flagged" if flagged else ""
             st.markdown('<div class="section-kicker">HASIL INDO BERT / SOFTMAX</div>'
                         f'<span class="prediction-badge {css}" style="font-size:.82rem;padding:.5rem .8rem">'
@@ -68,11 +68,11 @@ def render_input() -> None:
             st.caption("Klaim yang dianalisis")
             st.markdown(f'<div style="white-space:pre-wrap;overflow-wrap:anywhere">{escape(result["claim"])}</div>', unsafe_allow_html=True)
             first, second = st.columns(2)
-            first.metric("Greenwashing Probability", f'{result["greenwashing_probability"]:.1%}')
+            first.metric("Higher-risk Probability", f'{result["greenwashing_probability"]:.1%}')
             second.metric("Confidence", f'{result["confidence"]:.1%}')
-            st.plotly_chart(probability_bars(result["greenwashing_probability"], result["probabilities"]["Low Indication"]), width="stretch",
+            st.plotly_chart(probability_bars(result["greenwashing_probability"], result["probabilities"][LOWER_EVIDENTIARY_RISK]), width="stretch",
                             config={"displayModeBar": False}, key="quick_probability_chart")
-            st.caption("Confidence adalah probabilitas kelas yang dipilih. Probabilitas softmax tidak membuktikan kebenaran klaim.")
+            st.caption("Mode cepat memakai format CLAIM tanpa evidence context. Confidence adalah probabilitas kelas yang dipilih; hasil merupakan triase risiko bukti, bukan pembuktian greenwashing.")
             if result.get("truncated"):
                 st.warning(f"Input melewati batas {settings.max_length} token. Model hanya menilai bagian awal setelah truncation; gunakan analisis dokumen untuk segmentasi kalimat.")
 

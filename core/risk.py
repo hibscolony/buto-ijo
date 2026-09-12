@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import math
 
+from core.settings import DEFAULT_THRESHOLD
 
-POSITIVE_LABEL = "Potential Greenwashing"
-NEGATIVE_LABEL = "Low Indication"
+
+POSITIVE_LABEL = "Higher Evidentiary Risk"
+NEGATIVE_LABEL = "Lower Evidentiary Risk"
 
 
 def _validate_threshold(value: float, name: str) -> float:
@@ -16,7 +18,7 @@ def _validate_threshold(value: float, name: str) -> float:
     return value
 
 
-def apply_threshold(results: list[dict], threshold: float = 0.5) -> list[dict]:
+def apply_threshold(results: list[dict], threshold: float = DEFAULT_THRESHOLD) -> list[dict]:
     """Reclassify cached softmax probabilities without mutating input or using a model.
 
     Confidence is the softmax probability of the threshold-selected class; at a
@@ -36,7 +38,7 @@ def apply_threshold(results: list[dict], threshold: float = 0.5) -> list[dict]:
                 raise ValueError("Probabilitas per kelas harus berupa mapping label dan nilai.")
             if NEGATIVE_LABEL in class_probabilities:
                 low_probability = _validate_threshold(
-                    class_probabilities[NEGATIVE_LABEL], "Probabilitas Low Indication"
+                    class_probabilities[NEGATIVE_LABEL], "Probabilitas Lower Evidentiary Risk"
                 )
                 if not math.isclose(probability + low_probability, 1.0, rel_tol=0.0, abs_tol=1e-5):
                     raise ValueError("Probabilitas kedua kelas tidak konsisten: jumlahnya harus mendekati 1.")
@@ -53,7 +55,7 @@ def apply_threshold(results: list[dict], threshold: float = 0.5) -> list[dict]:
 
 
 def calculate_document_risk(
-    results: list[dict], threshold: float = 0.5, high_confidence_threshold: float = 0.8
+    results: list[dict], threshold: float = DEFAULT_THRESHOLD, high_confidence_threshold: float = 0.8
 ) -> dict:
     """Aggregate real claim probabilities using the documented v1 formula.
 

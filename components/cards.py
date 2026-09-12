@@ -5,6 +5,8 @@ from typing import Any
 
 import streamlit as st
 
+from core.model import HIGHER_EVIDENTIARY_RISK
+
 
 def hero() -> None:
     st.markdown(
@@ -67,7 +69,7 @@ def kpi_cards(summary: dict[str, Any]) -> None:
     cards = [
         ("Risk Score", f'{summary["risk_score"]:.1f}', ' / 100', "Indeks agregasi dokumen", "◉", f"risk-{level}"),
         ("Claims Analyzed", f'{summary["total_claims"]:,}', "", "Klaim berhasil dianalisis", "≡", ""),
-        ("Flagged Claims", f'{summary["flagged_claims"]:,}', "", "Potential Greenwashing", "⚑", ""),
+        ("Flagged Claims", f'{summary["flagged_claims"]:,}', "", "Higher Evidentiary Risk", "⚑", ""),
         ("Flagged Ratio", f'{summary["flagged_ratio"]:.1%}', "", "Dari seluruh klaim", "%", ""),
     ]
     fragments = [
@@ -89,11 +91,11 @@ def summary_card(summary: dict[str, Any]) -> None:
     st.markdown(
         '<div class="section-kicker">INSIGHT / CLAIM-LEVEL ANALYSIS</div><div class="section-title">Ringkasan Analisis</div>'
         f'<div class="summary-text">{opening}<br><br>Sebanyak <strong>{summary["flagged_claims"]:,} '
-        f'dari {summary["total_claims"]:,} klaim</strong> terindikasi memiliki potensi greenwashing '
-        'berdasarkan model IndoBERT.</div>'
+        f'dari {summary["total_claims"]:,} klaim</strong> berada pada kelas Higher Evidentiary Risk '
+        'berdasarkan checkpoint IndoBERT.</div>'
         '<div class="summary-callout">Perlu Verifikasi · Tinjau bukti, cakupan target, metodologi, '
         'dan konteks pada laporan asli sebelum menarik kesimpulan.</div>'
-        f'<div class="micro-copy">Threshold aktif: {summary.get("threshold", .5):.2f} · '
+        f'<div class="micro-copy">Threshold aktif: {summary.get("threshold", .36):.2f} · '
         'Ringkasan disusun secara rule-based dari hasil prediksi.</div>',
         unsafe_allow_html=True,
     )
@@ -109,7 +111,7 @@ def empty_state(title: str, description: str) -> None:
 def claim_table(results: list[dict[str, Any]]) -> None:
     rows = []
     for row in results:
-        flagged = row["prediction"] == "Potential Greenwashing"
+        flagged = row["prediction"] == HIGHER_EVIDENTIARY_RISK
         css = "flagged" if flagged else ""
         prob = float(row["greenwashing_probability"])
         page = row.get("page")
@@ -121,7 +123,7 @@ def claim_table(results: list[dict[str, Any]]) -> None:
         )
     st.markdown(
         '<div class="claim-table-wrap"><table class="claim-table"><thead><tr><th>No.</th>'
-        '<th>Claim / Sentence</th><th>Prediction</th><th>Greenwashing Probability</th>'
+        '<th>Claim / Sentence</th><th>Prediction</th><th>Higher-risk Probability</th>'
         '<th>Confidence</th><th>Page</th></tr></thead><tbody>' + ''.join(rows) + '</tbody></table></div>',
         unsafe_allow_html=True,
     )
@@ -135,6 +137,6 @@ def top_risk_claims(results: list[dict[str, Any]]) -> None:
             f'<div class="risk-claim"><div class="risk-rank">#{rank}</div><div style="flex:1;min-width:0">'
             f'<div class="risk-claim-top"><span>{escape(page)} · Klaim {int(row["claim_id"])}</span>'
             f'<span class="risk-claim-prob">{row["greenwashing_probability"]:.1%}</span></div>'
-            f'<p>“{escape(str(row["claim"]))}”</p><span class="micro-copy">Greenwashing Probability</span></div></div>'
+            f'<p>“{escape(str(row["claim"]))}”</p><span class="micro-copy">Higher-risk Probability</span></div></div>'
         )
     st.markdown(''.join(fragments), unsafe_allow_html=True)

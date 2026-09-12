@@ -216,7 +216,7 @@ class RealPredictionUITests(unittest.TestCase):
             expected_flagged = sum(row["greenwashing_probability"] >= 1.0 for row in self.results)
             self.assertEqual(app.session_state["risk_summary"]["flagged_claims"], expected_flagged)
 
-            app.selectbox(key="claim_filter").set_value("Low Indication").run()
+            app.selectbox(key="claim_filter").set_value("Lower Evidentiary Risk").run()
             _assert_clean(self, app)
             self.assertEqual(len(re.findall(r"<tr><td>(\d+)</td>", _table_html(app))), len(self.results) - expected_flagged)
             app.run()

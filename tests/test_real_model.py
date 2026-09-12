@@ -78,7 +78,10 @@ class RealModelIntegrationTests(unittest.TestCase):
         self.assertEqual(len(forward_calls), 2, "Three claims must use two size-2 batches.")
         self.assertTrue(all(call == (False, False) for call in forward_calls))
 
-        texts = [claim["text"] for claim in self.claims]
+        from core.preprocessing import format_model_input
+        from core.risk import NEGATIVE_LABEL, POSITIVE_LABEL
+
+        texts = [format_model_input(claim["text"]) for claim in self.claims]
         encoded = self.bundle.tokenizer(
             texts,
             padding=True,
@@ -100,13 +103,13 @@ class RealModelIntegrationTests(unittest.TestCase):
             self.assertEqual(prediction["claim"], claim["text"])
             self.assertAlmostEqual(prediction["greenwashing_probability"], positive, delta=1e-4)
             self.assertAlmostEqual(
-                prediction["probabilities"]["Potential Greenwashing"], positive, delta=1e-4
+                prediction["probabilities"][POSITIVE_LABEL], positive, delta=1e-4
             )
             self.assertAlmostEqual(
-                prediction["probabilities"]["Low Indication"], negative, delta=1e-4
+                prediction["probabilities"][NEGATIVE_LABEL], negative, delta=1e-4
             )
             self.assertAlmostEqual(sum(prediction["probabilities"].values()), 1.0, places=5)
-            expected_label = "Potential Greenwashing" if positive >= 0.5 else "Low Indication"
+            expected_label = POSITIVE_LABEL if positive >= self.settings.default_threshold else NEGATIVE_LABEL
             self.assertEqual(prediction["prediction"], expected_label)
 
     def test_single_claim_matches_batch(self):

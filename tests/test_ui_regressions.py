@@ -156,7 +156,7 @@ class DashboardNavigationRegressionTests(unittest.TestCase):
         app.run()
         app.text_input(key="claim_search").set_value("a search that matches no claim").run()
         app.selectbox(key="claim_sort").set_value("Page").run()
-        app.selectbox(key="claim_filter").set_value("Low Indication").run()
+        app.selectbox(key="claim_filter").set_value("Lower Evidentiary Risk").run()
         self.assertTrue(any("Tidak ada klaim" in item.value for item in app.info))
         app.button(key="replace_test_document").click().run()
         _assert_clean(self, app)

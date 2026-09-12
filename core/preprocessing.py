@@ -12,6 +12,7 @@ import re
 
 
 MIN_CHAR_LENGTH = 25
+CONTEXT_WINDOW = 2
 _DOT = "\ue000"
 _ABBREVIATIONS = re.compile(
     r"\b(?:PT|CV|UD|Tbk|Dr|Dra|Drs|Prof|Ir|Jl|No|Mr|Mrs|Ms|Ltd|Inc|Corp|"
@@ -122,10 +123,49 @@ def segment_claims(text: str, min_char_length: int = MIN_CHAR_LENGTH) -> list[st
     return claims
 
 
+def format_model_input(claim: str, context: str = "") -> str:
+    """Reproduce the final checkpoint's training input template."""
+    claim = clean_text(claim)
+    context = clean_text(context)
+    if not claim:
+        return ""
+    return f"CLAIM: {claim} [SEP] CONTEXT: {context}" if context else f"CLAIM: {claim}"
+
+
+def add_evidence_context(claims: list[dict], window: int = CONTEXT_WINDOW) -> list[dict]:
+    """Attach the two neighboring claims used as evidence context in training.
+
+    Context follows document order and retains page attribution on the target
+    claim. Repeated text identical to the target is omitted so it cannot act as
+    its own supporting evidence.
+    """
+    if isinstance(window, bool) or not isinstance(window, int) or window < 0:
+        raise ValueError("Context window harus berupa bilangan bulat non-negatif.")
+    enriched: list[dict] = []
+    for index, item in enumerate(claims):
+        target = clean_text(item.get("text", item.get("claim", "")))
+        parts: list[str] = []
+        previous = claims[max(0, index - window):index]
+        for previous_index, neighbor in enumerate(previous):
+            value = clean_text(neighbor.get("text", neighbor.get("claim", "")))
+            distance = len(previous) - previous_index
+            if value and value != target:
+                parts.append(f"PREV_{distance}: {value}")
+        following = claims[index + 1:index + 1 + window]
+        for distance, neighbor in enumerate(following, 1):
+            value = clean_text(neighbor.get("text", neighbor.get("claim", "")))
+            if value and value != target:
+                parts.append(f"NEXT_{distance}: {value}")
+        context = "\n".join(parts)
+        enriched.append({**item, "text": target, "evidence_context": context,
+                         "model_text": format_model_input(target, context)})
+    return enriched
+
+
 def build_claims(pages: list[dict], min_char_length: int = MIN_CHAR_LENGTH) -> list[dict]:
     """Build stable one-based claim identifiers, retaining the source PDF page."""
     claims: list[dict] = []
     for page in clean_pages(pages):
         for text in segment_claims(page["text"], min_char_length=min_char_length):
             claims.append({"claim_id": len(claims) + 1, "page": page["page"], "text": text})
-    return claims
+    return add_evidence_context(claims)

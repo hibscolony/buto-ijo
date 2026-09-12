@@ -8,9 +8,9 @@ from typing import Callable
 import torch
 
 from core.model import LOW_INDICATION, POTENTIAL_GREENWASHING, ModelBundle, load_model
-from core.preprocessing import build_claims, clean_text
+from core.preprocessing import build_claims, clean_text, format_model_input
 from core.risk import calculate_document_risk
-from core.settings import Settings, get_settings
+from core.settings import DEFAULT_THRESHOLD, Settings, get_settings
 
 ProgressCallback = Callable[[float, str], None]
 
@@ -21,7 +21,7 @@ class InferenceError(RuntimeError):
 
 def predict_batch(
     claims: list[dict], bundle: ModelBundle | None = None, settings: Settings | None = None,
-    threshold: float = 0.5, progress_callback: ProgressCallback | None = None,
+    threshold: float = DEFAULT_THRESHOLD, progress_callback: ProgressCallback | None = None,
 ) -> list[dict]:
     if not claims:
         raise ValueError("Tidak ada klaim yang dapat dianalisis.")
@@ -36,13 +36,14 @@ def predict_batch(
     try:
         for start in range(0, len(claims), settings.batch_size):
             batch = claims[start:start + settings.batch_size]
-            texts = [clean_text(item.get("text", item.get("claim", ""))) for item in batch]
-            if any(not text for text in texts):
+            display_texts = [clean_text(item.get("text", item.get("claim", ""))) for item in batch]
+            model_texts = [clean_text(item.get("model_text", "")) or format_model_input(text) for item, text in zip(batch, display_texts)]
+            if any(not text for text in display_texts) or any(not text for text in model_texts):
                 raise ValueError("Terdapat teks klaim kosong.")
             with bundle.lock:
                 # Count bounded tokens separately to report truncation honestly.
-                lengths = bundle.tokenizer(texts, padding=False, truncation=True, max_length=max_length + 1, return_length=True)["length"]
-                inputs = bundle.tokenizer(texts, return_tensors="pt", padding=True, truncation=True, max_length=max_length)
+                lengths = bundle.tokenizer(model_texts, padding=False, truncation=True, max_length=max_length + 1, return_length=True)["length"]
+                inputs = bundle.tokenizer(model_texts, return_tensors="pt", padding=True, truncation=True, max_length=max_length)
                 inputs = {key: tensor.to(bundle.device) for key, tensor in inputs.items()}
                 bundle.model.eval()
                 with torch.no_grad():
@@ -52,7 +53,7 @@ def predict_batch(
                     probabilities = torch.softmax(logits, dim=-1).cpu()
                 if not torch.isfinite(probabilities).all():
                     raise InferenceError("Model menghasilkan probability tidak valid.")
-            for item, text, probs, token_length in zip(batch, texts, probabilities.tolist(), lengths):
+            for item, text, probs, token_length in zip(batch, display_texts, probabilities.tolist(), lengths):
                 green = float(probs[bundle.mapping.greenwashing_index])
                 low = float(probs[bundle.mapping.low_indication_index])
                 results.append({
@@ -73,7 +74,7 @@ def predict_batch(
 
 
 def predict_text(
-    text: str, bundle: ModelBundle | None = None, settings: Settings | None = None, threshold: float = 0.5,
+    text: str, bundle: ModelBundle | None = None, settings: Settings | None = None, threshold: float = DEFAULT_THRESHOLD,
 ) -> dict:
     text = clean_text(text)
     if not text:
