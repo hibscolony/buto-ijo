@@ -33,21 +33,31 @@ def render() -> None:
     mapping = info.get("mapping")
     base = metadata.get("indobert_model", metadata.get("base_model", config.get("_name_or_path")))
     architecture = ", ".join(config.get("architectures", [])) or config.get("model_type")
-    version = metadata.get("pipeline_version", metadata.get("model_version"))
+    pipeline_version = metadata.get("pipeline_version")
+    version = metadata.get("model_version")
+    if not version and isinstance(pipeline_version, str):
+        version = pipeline_version.split("_", 1)[0]
     settings = get_settings()
     fields = [
         ("Base Model", base), ("Architecture", architecture),
+        ("Runtime Inference", "IndoBERT binary classifier saja"),
         ("Number of Labels", len(mapping.id2label) if mapping else None),
         ("Maximum Sequence Length", f'{min(settings.max_length, info.get("max_length", settings.max_length))} token (aktif)'),
-        ("Model Version", version), ("Training Dataset", metadata.get("training_dataset", metadata.get("label_source"))),
+        ("Model Version", version), ("Training Dataset", metadata.get("training_dataset")),
+        ("Training Label Source", metadata.get("label_source")),
     ]
     with st.container(border=True, key="about_card"):
         st.markdown('<div class="section-kicker">LOCAL CHECKPOINT</div><div class="section-title">IndoBERT Binary Classifier</div>', unsafe_allow_html=True)
         st.markdown('<div class="about-grid">' + ''.join(
             f'<div class="about-item"><div class="label">{escape(label)}</div><div class="value">{escape(_display(value))}</div></div>'
             for label, value in fields) + '</div>', unsafe_allow_html=True)
-        st.caption(f'Folder model: {info.get("path", settings.model_path)}')
+        st.caption(f'Folder model: `{info.get("path", settings.model_path)}`')
         st.caption("Checkpoint dipakai untuk inference lokal; bobot model tidak dilatih ulang.")
+        st.info(
+            "Aplikasi tidak memanggil Kimi atau Qwen saat digunakan. Metadata mencatat keduanya "
+            "sebagai teacher offline dalam pembuatan pseudo-label training; hasilnya sudah dipelajari "
+            "oleh checkpoint IndoBERT yang berjalan mandiri."
+        )
     st.subheader("Mapping label yang digunakan")
     if mapping:
         label_rows = []

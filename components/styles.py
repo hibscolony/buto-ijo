@@ -15,7 +15,9 @@ def inject_styles() -> None:
         html, body, [class*="css"], .stApp { font-family: "Segoe UI", Arial, sans-serif; }
         .stApp, [data-testid="stAppViewContainer"] { background: var(--canvas); color: var(--ink); }
         [data-testid="stHeader"] { background: rgba(247,249,247,.94); }
-        [data-testid="stMainBlockContainer"] { max-width: 1440px; padding: 2.2rem 3rem 3rem; }
+        .stMainBlockContainer, .block-container, [data-testid="stMainBlockContainer"] {
+          max-width:1440px; padding:4.75rem 3rem 3rem !important;
+        }
         .stMain h1, .stMain h2, .stMain h3 { color: var(--ink); letter-spacing: -.035em; }
         .stMain h1 { font-size: 2rem; font-weight: 750; }
         .stMain h2 { font-size: 1.4rem; }
@@ -51,7 +53,7 @@ def inject_styles() -> None:
         .status-dot.off { background:#F4A340; }
         .sidebar-foot { color:#96B69F; font-size:.67rem; line-height:1.6; padding:1.2rem .2rem; }
         .topline { display:flex; justify-content:space-between; gap:1rem; align-items:center; padding-bottom:1.2rem; }
-        .eyebrow { font-size:.68rem; text-transform:uppercase; font-weight:750; letter-spacing:.16em; color:#74917E; }
+        .eyebrow { font-size:.68rem; line-height:1.45; text-transform:uppercase; font-weight:750; letter-spacing:.16em; color:#74917E; }
         .local-pill { border:1px solid #DDE9DF; background:#EDF5EF; border-radius:100px; padding:5px 11px;
           color:#487352; font-size:.68rem; white-space:nowrap; }
         .local-pill:before { content:""; display:inline-block; width:6px; height:6px; background:#65A15D;
@@ -164,13 +166,17 @@ def inject_styles() -> None:
         [data-testid="stAlert"] { border-radius:10px; }
         [data-testid="stDecoration"] { display:none; }
         @media (max-width: 1100px) {
-          [data-testid="stMainBlockContainer"] { padding:1.5rem 1.5rem 2.5rem; }
+          .stMainBlockContainer, .block-container, [data-testid="stMainBlockContainer"] {
+            padding:4.5rem 1.5rem 2.5rem !important;
+          }
           .hero { padding:1.8rem; } .hero-quote { right:1.5rem; font-size:.9rem; }
           .hero-content { max-width:72%; } .hero-art { width:260px; }
           .kpi { padding:1rem; } .kpi-icon { display:none; }
         }
         @media (max-width: 700px) {
-          [data-testid="stMainBlockContainer"] { padding:1rem .9rem 2rem; }
+          .stMainBlockContainer, .block-container, [data-testid="stMainBlockContainer"] {
+            padding:4.25rem .9rem 2rem !important;
+          }
           .topline { padding-bottom:.8rem; } .local-pill { font-size:.57rem; }
           .hero { padding:1.4rem; min-height:310px; border-radius:15px; }
           .hero-content { max-width:100%; } .hero-title { font-size:2.7rem; }

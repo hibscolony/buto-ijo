@@ -64,7 +64,7 @@ Mapping ini **dibaca saat runtime**, bukan diasumsikan dari index 1. `resolve_la
 
 Checkpoint ini memiliki field warisan `_num_labels: 5`; mapping aktif berisi dua kelas dan tensor `classifier.weight` berukuran `[2, 768]`, dengan bias `[2]`. Loader memvalidasi dimensi bobot serta `model.config.num_labels`, lalu menolak missing/mismatched weights agar classifier baru yang belum dilatih tidak dipakai. Berkas asli tidak dimodifikasi.
 
-Model dasar dari metadata adalah `indobenchmark/indobert-base-p1`. Dataset berisi 915 pseudo/silver labels (627 train, 139 validation, 149 test), berasal dari konsensus Rule + Qwen + Kimi. Tidak diasumsikan ada human gold standard. **Model mempelajari risiko kecukupan bukti pada klaim lingkungan**, bukan pembuktian kesalahan perusahaan. Tidak ada accuracy/F1 yang dibuat jika tidak ada di metadata.
+Model dasar dari metadata adalah `indobenchmark/indobert-base-p1`. Dataset berisi 915 pseudo/silver labels (627 train, 139 validation, 149 test), berasal dari konsensus Rule + Qwen + Kimi. **Kimi dan Qwen hanya berperan sebagai teacher offline saat pseudo-label training dibuat; aplikasi tidak memanggil keduanya saat inference.** Runtime hanya memuat checkpoint IndoBERT lokal. Tidak diasumsikan ada human gold standard. **Model mempelajari risiko kecukupan bukti pada klaim lingkungan**, bukan pembuktian kesalahan perusahaan. Tidak ada accuracy/F1 yang dibuat jika tidak ada di metadata.
 
 Metadata mencatat `best_validation_threshold ≈ 0.36`; aplikasi memulai pada **0.50**, sesuai spesifikasi. Nilai metadata ditampilkan sebagai informasi, bukan otomatis diterapkan. Threshold tersebut tidak membuktikan kalibrasi probabilitas di data baru.
 
