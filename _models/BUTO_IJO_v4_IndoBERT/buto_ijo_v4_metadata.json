@@ -1,0 +1,43 @@
+{
+  "project": "BUTO IJO",
+  "pipeline_version": "v4_environmental_only_rule_qwen_kimi",
+  "task": "environmental sustainability claim evidentiary risk",
+  "label_type": "high-confidence pseudo/silver labels",
+  "label_source": "strict Rule + Qwen + Kimi consensus",
+  "qwen_model": "Qwen/Qwen3-4B-Instruct-2507",
+  "kimi_model": "moonshotai/Kimi-VL-A3B-Instruct",
+  "indobert_model": "indobenchmark/indobert-base-p1",
+  "risk_definition": {
+    "Higher Risk": "evidence score 0-4",
+    "Lower Risk": "evidence score 5-10"
+  },
+  "evidence_dimensions": [
+    "quantification",
+    "baseline_timeframe",
+    "scope_boundary",
+    "method_source",
+    "verification_traceability"
+  ],
+  "strict_environmental_rule": "requires explicit environmental domain + standalone claim signal; generic sustainability/ESG/SDG alone excluded",
+  "train_companies": [
+    "INDF",
+    "INTP",
+    "ASII",
+    "UNTR"
+  ],
+  "val_companies": [
+    "BRI",
+    "Mandiri"
+  ],
+  "test_companies": [
+    "INCO",
+    "BSI"
+  ],
+  "best_validation_threshold": 0.3600000000000002,
+  "n_pseudo_labels": 915,
+  "n_train": 627,
+  "n_val": 139,
+  "n_test": 149,
+  "seed": 42,
+  "limitation": "No human gold-standard is assumed. Reported downstream metrics are predictive agreement with strict multi-teacher pseudo labels."
+}

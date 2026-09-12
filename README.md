@@ -26,13 +26,19 @@ Aplikasi tersedia di `http://localhost:8501`. Dependensi hanya perlu diunduh saa
 
 ## Lokasi model
 
-Default yang sesuai komputer ini:
+Repository menyertakan checkpoint asli di lokasi berikut. Bobot `model.safetensors` dikelola melalui Git LFS agar dapat dimuat langsung oleh Streamlit Community Cloud:
+
+```text
+_models/BUTO_IJO_v4_IndoBERT
+```
+
+Jika folder tersebut tidak ada pada instalasi Windows, aplikasi memakai lokasi lokal berikut sebagai fallback:
 
 ```text
 E:\Downloads\Buto Ijo\_models
 ```
 
-Folder tersebut harus berisi `config.json`, `model.safetensors`, berkas tokenizer, dan sebaiknya `buto_ijo_v4_metadata.json`. Folder model tidak dimasukkan ke Git. Path juga dapat menunjuk ke direktori induk yang mempunyai **tepat satu** subfolder checkpoint, misalnya `_models/BUTO_IJO_v4_IndoBERT/`.
+Folder checkpoint harus berisi `config.json`, `model.safetensors`, berkas tokenizer, dan sebaiknya `buto_ijo_v4_metadata.json`. Path juga dapat menunjuk ke direktori induk yang mempunyai **tepat satu** subfolder checkpoint.
 
 Override sebelum memulai server:
 
@@ -42,6 +48,8 @@ streamlit run app.py
 ```
 
 Jika folder tidak ada, checkpoint rusak/tidak lengkap, atau label tidak dapat dipastikan, aplikasi menampilkan error dan membatalkan inference. Tidak ada fallback. Setelah mengganti bobot atau path, restart proses Streamlit agar resource cache dibersihkan.
+
+Pada Linux dan Streamlit Community Cloud, default selalu menunjuk ke checkpoint di dalam repository. Override berbentuk path absolut Windows diabaikan pada Linux agar tidak berubah menjadi path rusak seperti `/mount/src/.../E:\Downloads\...`. Hapus secret lama tersebut jika pernah ditambahkan. Pastikan Git LFS terpasang ketika melakukan clone manual (`git lfs pull`); Community Cloud mengambil objek LFS secara otomatis.
 
 ## Label model yang diverifikasi
 
@@ -108,7 +116,7 @@ CSV memiliki kolom `claim_id,page,claim,prediction,greenwashing_probability,conf
 
 | Environment variable | Default | Kegunaan |
 |---|---|---|
-| `BUTO_IJO_MODEL_PATH` | `E:\Downloads\Buto Ijo\_models` | Checkpoint lokal |
+| `BUTO_IJO_MODEL_PATH` | Checkpoint repository pada Linux; checkpoint repository atau `E:\Downloads\Buto Ijo\_models` pada Windows | Override lokasi checkpoint lokal |
 | `BUTO_IJO_BATCH_SIZE` | `16` | Klaim per batch; turunkan jika kehabisan memori |
 | `BUTO_IJO_MAX_LENGTH` | `512` | Maksimum token (8–512, dibatasi juga kapasitas model) |
 | `BUTO_IJO_MIN_CHAR_LENGTH` | `25` | Batas minimum karakter klaim |
