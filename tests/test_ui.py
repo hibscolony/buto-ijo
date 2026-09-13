@@ -182,6 +182,27 @@ class RealPredictionUITests(unittest.TestCase):
         self.assertEqual(app.session_state["quick_result"], actual)
         self.assertTrue(any("input sebelumnya" in item.value for item in app.info))
 
+    def test_document_submit_displays_results_after_inference_rerun(self):
+        from io import BytesIO
+
+        uploaded = BytesIO((
+            "Emisi gas rumah kaca turun 12,5% pada 2024 dibandingkan tahun dasar 2020.\n\n"
+            "Penggunaan energi terbarukan meningkat menjadi 30% dari total konsumsi energi."
+        ).encode("utf-8"))
+        uploaded.name = "document-submit-test.txt"
+        with patch("streamlit.file_uploader", return_value=uploaded):
+            app = AppTest.from_file(APP_FILE, default_timeout=60).run()
+            self.assertFalse(app.button(key="analyze_document").disabled)
+            app.button(key="analyze_document").click().run(timeout=60)
+        _assert_clean(self, app)
+        self.assertTrue(app.session_state["original_probabilities"])
+        self.assertEqual(app.session_state["document_metadata"]["name"], uploaded.name)
+        self.assertTrue(any("Analysis Overview" in item.value for item in app.markdown))
+        self.assertTrue(any("Analisis selesai" in item.value for item in app.success))
+        self.assertTrue(app.button(key="analyze_document").disabled)
+        self.assertIn("claim-table", _table_html(app))
+        self.assertEqual(len(app.get("download_button")), 2)
+
     def test_threshold_filter_search_sort_and_rerun_keep_original_probabilities(self):
         app = AppTest.from_function(_document_results, default_timeout=30)
         self._seed_document(app)

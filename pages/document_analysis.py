@@ -27,11 +27,28 @@ from pages.quick_test import render_input as render_quick_input
 LOGGER = logging.getLogger(__name__)
 
 
+def _upload_signature(uploaded: Any, data: bytes | None = None) -> str:
+    # Streamlit recreates UploadedFile wrappers on reruns but keeps file_id for
+    # the same upload. Cache only the digest, privately in this browser session.
+    file_id = getattr(uploaded, "file_id", None)
+    key = (file_id, uploaded.name, getattr(uploaded, "size", None))
+    cached = st.session_state.get("_upload_signature_cache")
+    if file_id and cached and cached["key"] == key:
+        return cached["signature"]
+    digest = sha256(uploaded.name.encode("utf-8"))
+    digest.update(uploaded.getvalue() if data is None else data)
+    signature = digest.hexdigest()
+    # Generic streams can be edited in place, so always hash their current data.
+    if file_id:
+        st.session_state["_upload_signature_cache"] = {"key": key, "signature": signature}
+    return signature
+
+
 def _prepare_upload(uploaded: Any, settings: Any) -> dict:
     data = uploaded.getvalue()
     if len(data) > settings.max_upload_mb * 1024 * 1024:
         raise DocumentError(f"Ukuran dokumen melebihi batas {settings.max_upload_mb} MB.")
-    signature = sha256(uploaded.name.encode("utf-8") + data).hexdigest()
+    signature = _upload_signature(uploaded, data)
     prepared = st.session_state.get("_prepared_upload")
     if prepared and prepared.get("signature") == signature:
         return prepared
@@ -99,9 +116,25 @@ def render_upload() -> None:
                 LOGGER.exception("Document parsing failed")
                 st.error(f"Dokumen tidak dapat dibaca: {exc}")
         button, help_text = st.columns([1.35, 3])
-        clicked = button.button("Analisis Dokumen", type="primary", width="stretch",
-                                icon=":material/analytics:", disabled=prepared is None, key="analyze_document")
+        completed_metadata = st.session_state.get("document_metadata", {})
+        already_analyzed = bool(
+            prepared
+            and st.session_state.get("original_probabilities")
+            and prepared["signature"] == completed_metadata.get("signature")
+        )
+        clicked = button.button(
+            "Analisis Selesai" if already_analyzed else "Analisis Dokumen",
+            type="primary", width="stretch",
+            icon=":material/check_circle:" if already_analyzed else ":material/analytics:",
+            disabled=prepared is None or already_analyzed, key="analyze_document",
+        )
         help_text.caption(f"PDF, DOCX, TXT · Maks. {settings.max_upload_mb} MB · PDF memerlukan text layer")
+        if already_analyzed:
+            claim_count = len(st.session_state["original_probabilities"])
+            st.success(
+                f"Analisis selesai: {claim_count:,} klaim diproses. "
+                "Dashboard hasil ditampilkan di bawah area upload."
+            )
         if clicked and prepared:
             progress = st.progress(0, text="1/4 · Extracting document")
             status = st.empty()
@@ -135,6 +168,24 @@ def _remember_threshold() -> None:
     st.session_state.pop("results_page", None)
 
 
+def _result_view(originals: list[dict], threshold: float) -> dict:
+    # Save and history restore replace the immutable original-probability list.
+    # Retain it here so identity remains safe even after the current list changes.
+    # Keep just the current view per session, without hashing or globally caching
+    # private document text on every widget event.
+    cached = st.session_state.get("_result_view_cache")
+    if cached and cached["originals"] is originals and cached["threshold"] == threshold:
+        return cached
+    results = apply_threshold(originals, threshold)
+    view = {
+        "originals": originals, "threshold": threshold, "results": results,
+        "summary": calculate_document_risk(results, threshold=threshold),
+        "csv": results_to_csv(results),
+    }
+    st.session_state["_result_view_cache"] = view
+    return view
+
+
 def render_results() -> None:
     originals = st.session_state.get("original_probabilities")
     if not originals:
@@ -146,7 +197,7 @@ def render_results() -> None:
     # A failed parse leaves the previous prepared document cached. Compare the
     # currently selected upload, so old results remain clearly attributed.
     selected_signature = (
-        sha256(selected_upload.name.encode("utf-8") + selected_upload.getvalue()).hexdigest()
+        _upload_signature(selected_upload)
         if selected_upload is not None else None
     )
     if selected_upload is not None and selected_signature != metadata.get("signature"):
@@ -164,8 +215,8 @@ def render_results() -> None:
         st.caption("Confidence tinggi: probabilitas Higher Evidentiary Risk ≥ 0.80 dan klaim ditandai. Semua rasio menggunakan seluruh klaim sebagai penyebut. LOW ≤ 30; MODERATE > 30 hingga 60; HIGH > 60.")
         st.caption("Confidence adalah probabilitas kelas yang dipilih berdasarkan threshold; nilainya dapat di bawah 50% jika threshold diubah.")
         st.caption("Input dokumen mengikuti format training: CLAIM + dua klaim sebelum/sesudah sebagai evidence context. Model dilatih pada klaim lingkungan dengan label silver Rule–Qwen; validitas di luar domain tersebut belum ditetapkan.")
-    results = apply_threshold(originals, float(threshold))
-    summary = calculate_document_risk(results, threshold=float(threshold))
+    view = _result_view(originals, float(threshold))
+    results, summary = view["results"], view["summary"]
     st.session_state["analysis_results"] = results
     st.session_state["risk_summary"] = summary
     kpi_cards(summary)
@@ -196,14 +247,15 @@ def render_results() -> None:
     section_title("Ekspor hasil analisis", "Seluruh klaim · mengikuti threshold aktif")
     csv_col, json_col, _ = st.columns([1, 1, 1.5])
     filename = safe_export_name(metadata.get("name", "document"))
-    csv_col.download_button("Download CSV", data=results_to_csv(results),
+    csv_col.download_button("Download CSV", data=view["csv"], on_click="ignore",
                             file_name=f"BUTO_IJO_analysis_{filename}.csv", mime="text/csv",
                             icon=":material/download:", width="stretch")
     json_col.download_button("Download JSON Summary", data=summary_to_json(summary, metadata.get("name", "document")),
                              file_name=f"BUTO_IJO_summary_{filename}.json", mime="application/json",
-                             icon=":material/data_object:", width="stretch")
+                             icon=":material/data_object:", width="stretch", on_click="ignore")
 
 
+@st.fragment
 def render_claim_results(results: list[dict]) -> None:
     section_title("Hasil Analisis Klaim", "Prediksi per kalimat")
     with st.container(border=True, key="results_card"):
@@ -211,8 +263,9 @@ def render_claim_results(results: list[dict]) -> None:
         prediction_filter = filter_col.selectbox("Filter prediksi", ["Semua Klaim", HIGHER_EVIDENTIARY_RISK, LOWER_EVIDENTIARY_RISK], key="claim_filter")
         query = search_col.text_input("Cari klaim...", placeholder="Cari klaim...", key="claim_search")
         sorting = sort_col.selectbox("Urutkan", ["Highest Risk", "Lowest Risk", "Page"], key="claim_sort")
+        normalized_query = query.casefold().strip()
         visible = [row for row in results if (prediction_filter == "Semua Klaim" or row["prediction"] == prediction_filter)
-                   and query.casefold().strip() in row["claim"].casefold()]
+                   and normalized_query in row["claim"].casefold()]
         if sorting == "Highest Risk":
             visible.sort(key=lambda row: row["greenwashing_probability"], reverse=True)
         elif sorting == "Lowest Risk":

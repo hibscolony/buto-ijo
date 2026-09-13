@@ -90,6 +90,14 @@ Uji Teks Cepat memakai format claim-only (`CLAIM: <claim>`) karena tidak memilik
 
 Data dokumen dan hasil disimpan di memori session, tanpa database atau penyimpanan upload ke disk. Memuat ulang koneksi browser/server dapat menghapus riwayat; ekspor hasil yang perlu disimpan. Model/tokenizer dicache dengan `st.cache_resource`, sementara hasil dokumen tetap terpisah per session. Lock per model mencegah batch dari beberapa session memakai model bersama secara bersamaan.
 
+### Beban CPU dan rerun
+
+Model hanya dijalankan setelah tombol analisis ditekan. Tidak ada scraper, loop background, atau auto-refresh dalam aplikasi ini. Analisis laporan panjang tetap membutuhkan CPU karena setiap klaim beserta konteksnya diproses oleh IndoBERT; cache model menghindari pemuatan bobot ulang, bukan biaya inference pada analisis baru.
+
+Hash unggahan Streamlit yang sama dipakai ulang per session. Hasil threshold, ringkasan, dan CSV disimpan untuk hasil analisis serta threshold aktif; analisis baru, pemulihan riwayat, atau perubahan threshold memperbarui cache ini. Filter, pencarian, sorting, dan pagination tabel berjalan dalam `st.fragment`, sehingga tidak merender ulang seluruh dashboard. Tombol unduh tidak memicu rerun. Cache data dokumen tetap bersifat privat per session.
+
+Jika deployment mengalami CPU throttling, periksa log dan metrik resource pada waktu analisis. `BUTO_IJO_TORCH_THREADS` dapat diturunkan, misalnya ke `2` atau `1`, lalu restart server untuk membatasi paralelisme CPU; analisis mungkin menjadi lebih lama dan perubahan ini tidak menjamin throttling hilang. Menurunkan batch size terutama membantu penggunaan memori. Hindari mengurangi panjang token atau konteks hanya untuk menghemat CPU karena dapat mengubah prediksi. Waktu pelepasan throttle mengikuti informasi dari penyedia hosting dan tidak dapat dipastikan dari kode aplikasi.
+
 ## Parsing dan batasan input
 
 - **PDF:** PyMuPDF, nomor halaman fisik satu-based dipertahankan termasuk halaman tanpa teks. Nomor cetak pada laporan dapat berbeda. PDF berpassword harus dibuka proteksinya dahulu. Untuk PDF scan tanpa text layer, aplikasi menampilkan: “Dokumen tampaknya berupa hasil scan dan tidak memiliki text layer. OCR belum dijalankan pada versi ini.” PDF campuran hanya menganalisis bagian yang mempunyai text layer.
@@ -133,7 +141,7 @@ CSV memiliki kolom `claim_id,page,claim,prediction,greenwashing_probability,conf
 | `BUTO_IJO_MAX_LENGTH` | `384` | Maksimum token (8–512, dibatasi juga kapasitas model) |
 | `BUTO_IJO_MIN_CHAR_LENGTH` | `25` | Batas minimum karakter klaim |
 | `BUTO_IJO_MAX_UPLOAD_MB` | `50` | Batas file aplikasi (1–200 MB) |
-| `BUTO_IJO_TORCH_THREADS` | Maks. `4` | Thread PyTorch CPU (1–64) |
+| `BUTO_IJO_TORCH_THREADS` | `1` | Thread PyTorch CPU (1–64); naikkan hanya pada server dengan CPU khusus |
 
 Upload juga tunduk pada `server.maxUploadSize` di `.streamlit/config.toml`; gunakan nilai server setidaknya sebesar batas aplikasi jika menaikkan batas. Paket PyTorch standar yang dipasang di komputer ini dapat berupa build CPU. Untuk CUDA, pasang build PyTorch resmi yang sesuai driver GPU; aplikasi otomatis memilih CUDA ketika `torch.cuda.is_available()` bernilai true. Tidak diperlukan CUDA untuk memakai model.
 

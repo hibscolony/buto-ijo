@@ -226,7 +226,9 @@ def load_model(model_path: str = MODEL_PATH) -> ModelBundle:
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     try:
         # Bounded CPU parallelism avoids oversubscription across Streamlit sessions.
-        threads = int(os.getenv("BUTO_IJO_TORCH_THREADS", str(min(4, os.cpu_count() or 1))))
+        # A conservative default avoids saturating the small shared CPU quota on
+        # Streamlit Community Cloud. Local deployments can opt in to more threads.
+        threads = int(os.getenv("BUTO_IJO_TORCH_THREADS", "1"))
         if not 1 <= threads <= 64:
             raise ValueError("BUTO_IJO_TORCH_THREADS harus antara 1 dan 64")
         torch.set_num_threads(threads)

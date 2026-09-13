@@ -166,6 +166,29 @@ class DashboardNavigationRegressionTests(unittest.TestCase):
         self.assertFalse(any("Tidak ada klaim" in item.value for item in app.info))
         self.assertEqual(app.session_state["document_metadata"]["name"], "next-report.txt")
 
+    def test_table_controls_reuse_summary_and_exports_until_threshold_changes(self):
+        from tests.test_ui import _document_results
+
+        app = AppTest.from_function(_document_results, default_timeout=30)
+        self._seed_results(app)
+        app.run()
+        view = app.session_state["_result_view_cache"]
+        with patch("pages.document_analysis.apply_threshold", side_effect=AssertionError("Repeated classification")), \
+             patch("pages.document_analysis.calculate_document_risk", side_effect=AssertionError("Repeated aggregation")), \
+             patch("pages.document_analysis.results_to_csv", side_effect=AssertionError("Repeated CSV export")):
+            app.text_input(key="claim_search").set_value("energi").run()
+            app.selectbox(key="claim_sort").set_value("Page").run()
+            app.selectbox(key="claim_filter").set_value("Lower Evidentiary Risk").run()
+            app.run()
+            _assert_clean(self, app)
+            self.assertIs(app.session_state["_result_view_cache"], view)
+        self.assertTrue(all(button.proto.ignore_rerun for button in app.get("download_button")))
+        app.slider(key="threshold_widget").set_value(.91).run()
+        _assert_clean(self, app)
+        self.assertIsNot(app.session_state["_result_view_cache"], view)
+        self.assertEqual(app.session_state["risk_summary"]["threshold"], .91)
+        self.assertEqual(app.session_state["original_probabilities"], self.results)
+
     def test_successful_quick_retry_clears_previous_load_error(self):
         from core.model import ModelError
 
